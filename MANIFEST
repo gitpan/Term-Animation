@@ -4,3 +4,4 @@ Makefile.PL
 MANIFEST
 README
 t/use.t
+examples/color_nature.pl

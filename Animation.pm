@@ -6,7 +6,9 @@ use warnings;
 use Carp;
 use Curses;
 
-our $VERSION = '0.5';
+our $VERSION = '1.0';
+
+our ($color_names, $color_ids) = color_list();
 
 sub new {
   my $proto = shift;
@@ -24,6 +26,7 @@ sub new {
   }
   else {
     $self->{WIN} = new Curses;
+    noecho();
     curs_set(0);
   }
 
@@ -32,8 +35,72 @@ sub new {
   return $self;
 }
 
+# create lists mapping full color names (eg. 'blue') and
+# single character color ids (eg. 'b')
+sub color_list {
+  my %color_n;
+  my %color_i = (
+	black	=> 'k',
+	white	=> 'w',
+	red	=> 'r',
+	green	=> 'g',
+	blue	=> 'b',
+	cyan	=> 'c',
+	magenta	=> 'm',
+	yellow	=> 'y',
+  );
+
+  for (keys %color_i) {
+    $color_i{uc($_)} = uc($color_i{$_});
+  }
+
+  for (keys %color_i) {
+    $color_n{$color_i{$_}} = $_;
+    $color_n{$_} = $_;
+    $color_n{uc($_)} = uc($_);
+  }
+
+  for(qw{ k w r g b c m y }) {
+    $color_i{$_} = $_;
+    $color_i{uc($_)} = uc($_);
+  }
+
+  return (\%color_n, \%color_i);
+}
+
+# turn on ANSI color, and initialize color settings
+sub enable_color {
+  my ($self) = @_;
+  return if($self->{COLOR});
+  start_color();
+  unless(defined($self->{BG})) { $self->{BG} = 'BLACK'; }
+  $self->set_colors();
+  $self->{WIN}->bkgdset($self->{COLORS}{'w'});
+  $self->{COLOR} = 1;
+}
+
+# turn off color
+sub disable_color {
+  my ($self) = @_;
+  return unless($self->{COLOR});
+  $self->{COLOR} = 0;
+}
+
+# perform a single animation cycle
+sub animate {
+  my ($self) = @_;
+  $self->do_callbacks();
+  $self->build_screen();
+  $self->display_screen();
+}
+
+# resize our curses window
 sub update_term_size {
   my $self = shift;
+  # dunno how portable this is. i should probably be using
+  # resizeterm.
+  endwin();
+  refresh();
   ($self->{WIDTH}, $self->{HEIGHT}, $self->{ASSUMED_SIZE}) = get_term_size($self->{WIN});
 }
 
@@ -58,26 +125,49 @@ sub get_term_size {
   return($width-1, $height-1, $assumed_size);
 }
 
+# build a list of every color combination for our current
+# background color
+sub set_colors {
+  my ($self) = @_;
+
+  my $cid = 1;
+
+  my $bg = eval "Curses::COLOR_$self->{BG}";
+
+  for my $f ('w', 'r', 'g', 'b', 'c', 'm', 'y', 'k') {
+    my $c = uc(color_name($f));
+    init_pair($cid, eval "Curses::COLOR_$c", $bg);
+    $self->{COLORS}{$f} = COLOR_PAIR($cid);
+    $cid++;
+  }
+}
+
+# update the background color. accepts either a full
+# color name ('blue') or a single character name ('b')
+# return 1 on success, 0 on failure
+sub set_background {
+  my ($self, $color) = @_;
+  my $bg_color = color_name($color);
+  if(defined($bg_color)) {
+    $self->{BG} = uc($bg_color);
+    $self->set_colors();
+    $self->{WIN}->bkgdset($self->{COLORS}{'w'});
+    return 1;
+  }
+  else {
+    return 0;
+  }
+}
+
 # write to the curses window
 sub build_screen {
   my($self) = @_;
 
-  foreach my $i (0..$self->{HEIGHT}) {
-    foreach my $j (0..$self->{WIDTH}) {
-      $self->{WIN}->addstr($i, $j, ' ');
-    }
-  }
+  # clear the window before we start redrawing
+  $self->{WIN}->addstr( 0, 0, ' 'x$self->size() );
 
   foreach my $object_name (sort {$self->{OBJECTS}->{$a}{'Z'} <=> $self->{OBJECTS}->{$b}{'Z'}} keys %{$self->{OBJECTS}}) {
-    if($self->{OBJECTS}->{$object_name}{'WRAP'}) {
-      draw_wrapped_object($self, $object_name);
-    }
-    elsif($self->{OBJECTS}{$object_name}{EXTENDING}) {
-      draw_extending_object($self, $object_name);
-    }
-    else {
-      draw_object($self, $object_name);
-    }
+    draw_object($self, $object_name);
   }
 }
 
@@ -101,64 +191,66 @@ sub draw_extending_object {
   }  
 }
 
-# draw an object that can wrap around the screen
-# note that objects that wrap cannot be extended across the screen
-sub draw_wrapped_object {
-  my ($self, $object_name) = @_;
-
-  my $shape = $self->{OBJECTS}->{$object_name}{SHAPE}[$self->{OBJECTS}->{$object_name}{CURR_FRAME}];
-  my ($x, $y) = ($self->{OBJECTS}->{$object_name}{'X'}, $self->{OBJECTS}->{$object_name}{'Y'});
-  my ($w, $h) = ($self->{WIDTH}, $self->{HEIGHT});
-
-  for my $i (0..$#{$shape}) {
-    for my $j (0..$#{$shape->[$i]}) {
-      my $y_pos = $y+$i;
-      my $x_pos = $x+$j;
-
-      unless($shape->[$i]->[$j] eq $self->{OBJECTS}->{$object_name}{TRANSPARENT}) { # $
-        if($x_pos > $w) {
-          $x_pos = $j - ($w - $x) - 1;
-        }
-        if($y_pos > $h) {
-            $y_pos = $i - ($h - $y) - 1;
-        }
-        unless($x_pos < 0 or $x_pos > $w or $y_pos < 0 or $y_pos > $h) {
-          $self->{WIN}->addstr(int($y_pos), int($x_pos), $shape->[$i]->[$j]);
-        }
-      }
-    }
-  }
-}
-
+# draw an object into the curses window in memory
 sub draw_object {
   my ($self, $object_name) = @_;
 
-  my $shape = $self->{OBJECTS}->{$object_name}{SHAPE}[$self->{OBJECTS}->{$object_name}{CURR_FRAME}];
-  my ($x, $y) = ($self->{OBJECTS}->{$object_name}{'X'}, $self->{OBJECTS}->{$object_name}{'Y'});
+  # a few temporary variables to make the code below easier to read
+  my $shape   = $self->{OBJECTS}{$object_name}{SHAPE}[$self->{OBJECTS}{$object_name}{CURR_FRAME}];
+  my $colors  = $self->{COLORS};
+  my $fg      = $self->{OBJECTS}{$object_name}{COLOR}[$self->{OBJECTS}{$object_name}{CURR_FRAME}];
+  my $attrs   = $self->{OBJECTS}{$object_name}{ATTR}[$self->{OBJECTS}{$object_name}{CURR_FRAME}];
+  my ($x, $y) = ($self->{OBJECTS}{$object_name}{'X'}, $self->{OBJECTS}{$object_name}{'Y'});
   my ($w, $h) = ($self->{WIDTH}, $self->{HEIGHT});
-  my ($exp, $exn, $eyp, $eyn) = ($self->{OBJECTS}{$object_name}{EXTEND_X_POS}, 
-				$self->{OBJECTS}{$object_name}{EXTEND_X_NEG},
-				$self->{OBJECTS}{$object_name}{EXTEND_Y_POS},
-				$self->{OBJECTS}{$object_name}{EXTEND_Y_NEG});
-
+  my $wrap    = $self->{OBJECTS}{$object_name}{WRAP};
+  my $trans   = $self->{OBJECTS}{$object_name}{TRANSPARENT};
+  my $color   = $self->{COLOR};
+  my $attr;
 
   for my $i (0..$#{$shape}) {
-    for my $j (0..$#{$shape->[$i]}) {
-      my $y_pos = $y+$i;
-      my $x_pos = $x+$j;
 
-      unless($shape->[$i]->[$j] eq $self->{OBJECTS}->{$object_name}{TRANSPARENT}) { # transparent char
-        if($x_pos > $w) { next; }
-        if($y_pos > $h) { next; }
-        unless($x_pos < 0 or $x_pos > $w or $y_pos < 0 or $y_pos > $h) {
-          $self->{WIN}->addstr(int($y_pos), int($x_pos), $shape->[$i]->[$j]);
+    my $y_pos = $y+$i;
+
+    for my $j (0..$#{$shape->[$i]}) {
+
+      unless($shape->[$i][$j] eq $trans) { # transparent char
+
+        my $x_pos = $x+$j;
+
+        if($wrap) {
+          while($x_pos > $w) { $x_pos -= ($w + 1); }
+          while($y_pos > $h) { $y_pos -= ($h + 1); }
         }
+        elsif($x_pos > $w or $y_pos > $h) {
+          next;
+        }
+
+        unless($x_pos < 0 or $y_pos < 0) {
+          if($color) {
+
+            if(defined($attrs->[$i][$j])) {
+              $attr = $colors->{$fg->[$i][$j]} | $attrs->[$i][$j];
+            }
+            else {
+              $attr = $colors->{$fg->[$i][$j]};
+            }
+
+            $self->{WIN}->attron( $attr );
+            $self->{WIN}->addstr( int($y_pos), int($x_pos), $shape->[$i][$j]);
+            $self->{WIN}->attroff( $attr );
+
+          }
+          else {
+            $self->{WIN}->addstr( int($y_pos), int($x_pos), $shape->[$i][$j]);
+          }
+        }
+
       }
     }
   }
 }
 
-# add an object to the screen. if it has the same name
+# add an object to the animation. if it has the same name
 # as an existing object, the old object will be replaced
 sub add_object {
   my ($self, @objects) = @_;
@@ -167,7 +259,8 @@ sub add_object {
   }
 }
 
-# remove an object from the screen
+# remove an object from the animation. returns 1 on success,
+# 0 on failure
 sub del_object {
   my ($self, $object_name) = @_;
   if(defined($self->{OBJECTS}{$object_name})) {
@@ -175,9 +268,43 @@ sub del_object {
       $self->{OBJECTS}{$object_name}{DEATH_CB}->($self, $object_name);
     }
     delete $self->{OBJECTS}{$object_name};
+    return 1;
   }
   else {
     carp("Attempted to destroy nonexistant object '$object_name'");
+    return 0;
+  }
+}
+
+# remove every object from the animation
+sub remove_all_objects {
+  my ($self) = @_;
+  $self->{OBJECTS} = {};
+}
+
+# return the full name of a color, given either a full
+# name or a single char. abbreviation
+sub color_name {
+  my ($color) = @_;
+  if(defined($color_names->{$color})) {
+    return $color_names->{$color};
+  }
+  else {
+    carp("Attempt to allocate unknown color: $color");
+    return undef;
+  }
+}
+
+# return the single char. abbreviation for a color, 
+# given either a full name or abbreviation
+sub color_id {
+  my ($color) = @_;
+  if(defined($color_ids->{$color})) {
+    return $color_ids->{$color};
+  }
+  else {
+    carp("Attempt to allocate unknown color: $color");
+    return undef;
   }
 }
 
@@ -221,21 +348,31 @@ sub height {
   return $self->{HEIGHT};
 }
 
+sub size {
+  my ($self) = @_;
+  return ( ( $self->{HEIGHT} + 1 ) * ( $self->{WIDTH} + 1 ) )
+}
+
+sub color_enabled {
+  my ($self) = @_;
+  return $self->{COLOR};
+}
+
 # redraw the entire screen
 sub redraw_screen {
   my ($self) = @_;
-  clear($self->{WIN});
-  refresh($self->{WIN});
+  $self->{WIN}->clear();
+  $self->{WIN}->refresh();
   $self->build_screen();
-  move($self->{WIN}, $self->{HEIGHT}, $self->{WIDTH});
-  refresh($self->{WIN});
+  $self->{WIN}->move($self->{HEIGHT}, $self->{WIDTH});
+  $self->{WIN}->refresh();
 }
 
 # draw the elements of the screen that have changed since the last update
 sub display_screen {
   my ($self) = @_;
-  move($self->{WIN}, $self->{HEIGHT}, $self->{WIDTH});
-  refresh($self->{WIN});
+  $self->{WIN}->move($self->{HEIGHT}, $self->{WIDTH});
+  $self->{WIN}->refresh();
 }
 
 # create a single animation object
@@ -255,9 +392,10 @@ sub build_object {
 
   $object{NAME}         = $p{'name'};
   ($object{SHAPE}, $object{HEIGHT}, $object{WIDTH}) = $self->build_shape($p{'shape'});
-  ($object{X}, $object{Y}, $object{Z}) = defined($p{'position'}) ? @{$p{'position'}} : [ 0, 0, 0 ];
+  ($object{X}, $object{Y}, $object{Z})	= defined($p{'position'}) ? @{$p{'position'}} : [ 0, 0, 0 ];
   $object{CALLBACK_ARGS}= (defined($p{'callback_args'}))? $p{'callback_args'}: undef;
   $object{CURR_FRAME}   = (defined($p{'curr_frame'}))   ? $p{'curr_frame'}   : 0;
+  $object{DEF_COLOR}	= (defined($p{'default_color'})) ? color_id($p{'default_color'}) : 'w';
   $object{WRAP}         = (defined($p{'wrap'}))         ? $p{'wrap'}         : 0;
   $object{TRANSPARENT}	= (defined($p{'transparent'}))  ? $p{'transparent'}  : '?';
   $object{AUTO_DEATH}	= (defined($p{'auto_death'}))   ? lc($p{'auto_death'}) : undef;
@@ -270,9 +408,16 @@ sub build_object {
   $object{EXTEND_Y_NEG} = (defined($p{'extend_y'}))     ? $p{'extend_y'} < 0 : 0;
   $object{EXTENDING}    = $object{EXTEND_X_POS} | $object{EXTEND_X_NEG} | $object{EXTEND_Y_POS} | $object{EXTEND_Y_NEG};
 
+  if(defined($p{'color'})) {
+    ($object{COLOR},$object{ATTR}) = $self->build_mask($object{DEF_COLOR},$p{'color'});
+  }
+  else {
+    ($object{COLOR},$object{ATTR}) = $self->default_mask($object{DEF_COLOR},$#{$object{SHAPE}},$object{HEIGHT},$object{WIDTH});
+  }
+
   if   (defined($p{'callback'}))      { $object{CALLBACK} = $p{'callback'}; }
-  elsif(defined($p{'callback_args'})) { $object{CALLBACK} = \&move_object;    }
-  else                                  { $object{CALLBACK} = undef;            }
+  elsif(defined($p{'callback_args'})) { $object{CALLBACK} = \&move_object;  }
+  else                                { $object{CALLBACK} = undef;          }
 
   # a little bit of checking to make sure we built a valid object
   if(defined($object{AUTO_DEATH}) and $object{AUTO_DEATH} ne 'offscreen') {
@@ -282,6 +427,57 @@ sub build_object {
   }
 
   return \%object;
+}
+
+# create a color mask for an object that will only have one color
+sub default_mask {
+  my ($self, $def_color, $frames, $height, $width) = @_;
+  my (@mask, @amask);
+  my $attr = 0;
+
+  if($def_color =~ /[A-Z]/) { $attr = 1; }
+
+  for my $f ( 0..$frames ) {
+    for my $i ( 0..$height ) {
+      for my $j (0..$width ) {
+        $mask[$f][$i][$j] = lc($def_color);
+        if($attr) { $amask[$f][$i][$j] = Curses::A_BOLD; }
+      }
+    }
+  }
+
+  return (\@mask, \@amask);
+}
+
+# create a color mask for an object        
+sub build_mask {
+  my ($self, $def_color, @shape) = @_;
+  my ($mask, $height, $width) = $self->build_shape(@shape);
+
+  my @amask;
+
+  for my $f (0..$#{$mask}) {
+    for my $i (0..$height) {
+      for my $j (0..$width) {
+        if(!defined($mask->[$f][$i][$j]) or $mask->[$f][$i][$j] eq ' ') {
+          $mask->[$f][$i][$j] = $def_color;
+        }
+        elsif(defined($mask->[$f][$i][$j])) {
+          # make sure it's a valid color
+          unless(defined($color_names->{$mask->[$f][$i][$j]})) {
+            carp("Invalid color mask: $mask->[$f][$i][$j]");
+            $mask->[$f][$i][$j] = undef;
+          }
+        }
+        # capital letters indicate bold colors
+        if($mask->[$f][$i][$j] =~ /[A-Z]/) {
+          $mask->[$f][$i][$j] = lc($mask->[$f][$i][$j]);
+          $amask[$f][$i][$j] = Curses::A_BOLD;
+        }
+      }
+    }
+  }
+  return ($mask, \@amask);
 }
 
 # take one of 1) a string 2) an array of strings 3) an array of 2D arrays
@@ -513,10 +709,17 @@ sub do_callbacks {
   }
 }
 
-
+# stop curses cleanly
 sub end {
   my ($self) = @_;
   endwin;
+}
+
+sub elog {
+  my ($mesg) = @_;
+  open(F, ">>", "elog.log");
+  print F "$mesg\n";
+  close(F);
 }
 
 1;
@@ -556,6 +759,9 @@ argument, and will draw into that window.
 This example moves a small object across the screen from left to right.
 
     use Term::Animation;
+    use Curses;
+
+    halfdelay( 2 );
 
     $screen = Term::Animation->new();
 
@@ -564,33 +770,31 @@ This example moves a small object across the screen from left to right.
 
     # turn our shape into an animation object
     $object = $screen->build_object(
-                     name          => "UFO",         # object name
-                     shape         => $shape,        # object shape
-                     position      => [3, 7, 10],    # row / column / depth
-                     callback_args => [1, 0, 0, 0],  # the default callback
-                                                     # routine takes a list
-                                                     # of x,y,z,frame deltas
-                     wrap          => 1              # screen wrap
-                                 );
+                 name          => "UFO",         # object name
+                 shape         => $shape,        # object shape
+                 position      => [3, 7, 10],    # row / column / depth
+                 callback_args => [1, 0, 0, 0],  # the default callback
+                                                 # routine takes a list
+                                                 # of x,y,z,frame deltas
+                 wrap          => 1              # screen wrap
+             );
 
     # add the object to our animation
     $screen->add_object($object);
 
     # animation loop
     while(1) {
-      # run the callback routine for each object
-      $screen->do_callbacks();
+      # run the callback routines for all the objects, and update
+      # the screen
+      $screen->animate();
 
-      # draw the new positions/frames of the objects in memory
-      $screen->build_screen();
-
-      # print the updated screen
-      $screen->display_screen();
-
-      sleep 1;
+      # use getch to control the frame rate, and get input at the
+      # same time. 
+      my $input = getch();
+      if($input eq 'q') { last; }
     }
 
-    # in the unlikely event that 1 becomes untrue, exit cleanly
+    # cleanly end the animation, to avoid hosing up the user's terminal
     $screen->end();
 
 This illustrates how to draw your animation into an existing Curses window.
@@ -598,7 +802,8 @@ This illustrates how to draw your animation into an existing Curses window.
     use Term::Animation;
     use Curses;
 
-    # Term::Animation will not call initscr for you if you pass it a window
+    # Term::Animation will not call initscr for you if
+    # you pass it a window
     initscr();
 
     $win = newwin(5,10,8,7);
@@ -614,6 +819,12 @@ Everything else would be identical to the previous example.
 =item I<add_object ($object1, [ $object2 ...])>
 
 Add one or more animation objects to the animation.
+
+=item I<animate()>
+
+Generate and display a single animation frame. Calls I<do_callbacks()>,
+I<build_screen()> and I<display_screen()>. You can call them yourself
+if you want to, but there is little useful you could do between these calls.
 
 =item I<auto_trans ($shape, ['transparent character'])>
 
@@ -632,15 +843,16 @@ and a set of arguments to describe the object's behavior. The only required
 arguments are C<name> and C<shape>.
 
     name              A string uniquely identifying this object
-    shape             The ASCII art for this object. It can be provided as:
+    shape             The ASCII art for this object. It can be
+                      provided as:
                       1) A single multi-line text string
                       2) An array of multi-line text strings
-                      3) An array of 2D arrays, where each array element
-                         is a single character
-                      If you provide an array, each element is a single
-                      frame of animation. If you provide either 1) or
-                      2), a single newline will be stripped off of
-                      the beginning of each string.
+                      3) An array of 2D arrays, where each array
+                         element is a single character
+                      If you provide an array, each element is a
+                      single frame of animation. If you provide
+                      either 1) or 2), a single newline will be
+                      stripped off of the beginning of each string.
     position          A list specifying initial x,y and z coordinates
                       Default: [ 0, 0, 0 ]
     callback          Callback routine for this object
@@ -648,18 +860,23 @@ arguments are C<name> and C<shape>.
     callback_args     Arguments to the callback routine
     curr_frame        Animation frame to begin with
                       Default: 0
-    wrap              Whether this object should wrap around the edge of the
-                      screen (0 = No, 1 = Yes)
+    wrap              Whether this object should wrap around the edge
+                      of the screen (0 = No, 1 = Yes)
                       Default: 0
     transparent       Character used to indicate transparency
                       Default: ?
-    auto_death        Method to automatically kill an object. Valid values
-                      are 'offscreen', 'time', and 'frame'. See AUTO_DEATH
-                      section below for more detail.
-    death_arg         Integer indicating 'time' or 'frame' for this object
-                      to die
+    auto_death        Method to automatically kill an object. Valid
+                      values are 'offscreen', 'time', and 'frame'.
+                      AUTO_DEATH section below for more detail.
+    death_arg         Integer indicating 'time' or 'frame' for this
+                      object to die
     death_cb          Callback routine used when this object dies
     dcb_args          Arguments to the death callback routine
+    color             Color mask. This follows the same format as
+                      'shape'. See the 'COLOR' section below for more
+                      details
+    default_color     A default color to use for the object.
+                      See the 'COLOR' section below for more details
 
 =item I<build_screen()>
 
@@ -667,6 +884,14 @@ Update the curses object in memory with any changes that have
 been made after I<do_callbacks()> has run. After calling this, you
 will need to call I<display_screen()> for the changes to show up on your
 display.
+
+=item I<color_enabled()>
+
+Returns 1 if color is enabled, 0 otherwise
+
+=item I<disable_color()>
+
+Turn off ANSI color after it has been turned on using I<enable_color()>
 
 =item I<display_screen()>
 
@@ -677,6 +902,13 @@ I<do_callbacks()> in the middle won't do anything.
 =item I<do_callbacks()>
 
 Run the callback routines for all of the objects in the animation.
+
+=item I<enable_color()>
+
+Turn on ANSI color. This MUST be called immediately after creating
+the animation object, because the Curses start_color call must 
+be made immediately. You can then turn color on and off using this
+and I<disable_color()> whenever you want.
 
 =item I<end()>
 
@@ -728,11 +960,26 @@ Clear everything from the screen, and redraw what should be there. This
 should be called after I<update_term_size()>, or if the user indicates that
 the screen should be redrawn to get rid of artifacts.
 
+=item I<remove_all_objects()>
+
+Remove every animation object. This is useful if you need to start the
+animation over (eg. after a screen resize)
+
+=item I<set_background('color_name')>
+
+Change the background color. The default background color is black. You
+can only have one background color for the entire Curses window that
+the animation is running in.
+
+=item I<size()>
+
+Returns the number of characters in the curses window (width * height)
+
 =item I<update_term_size()>
 
 Call this if you suspect the terminal size has changed (eg. if you
-get a SIGWINCH signal). You will want to call I<redraw_screen()> afterwards
-to make sure you don't leave an artifacts on the screen.
+get a SIGWINCH signal). Call I<remove_all_objects()> after this if
+you want to recreate your animation from scratch.
 
 =head1 CALLBACK ROUTINES
 
@@ -781,6 +1028,58 @@ by I<localtime()> in scalar context. For 'frame', the argument is
 the number of frames that should be displayed after this object is
 added to the animation, before it dies. The 'offscreen' option does
 not require a C<death_arg> argument.
+
+=head1 COLOR
+
+ANSI color is available for terminals that support it. Only a single
+background color can be used for the window (it would look terrible
+in most cases otherwise anyway). Colors for objects are specified by
+using a 'mask' that indicates the color for each character. For
+example, say we had a single frame of a bird:
+
+$bird = q#
+
+---. .-. .---
+  --\'v'/--
+     \ /
+     " "
+#;
+
+To indicate the colors you want to use for the bird, create a matching
+mask, with the first letter of each color in the appropriate position
+(except black, which is 'k'). Pass this mask to I<build_object()> as
+the 'color' parameter.
+
+$mask = q#
+
+BBBB BBB BBBB
+  BBBWYWBBB
+     B B
+     Y Y
+#;
+
+When specifying a color, using uppercase indicates the color should be
+bold. So 'BLUE' or 'B' means bold blue, and 'blue' or 'b' means non-bold
+blue. 'Blue' means you get an error message.
+
+You can also provide a default color with the default_color parameter
+to build_object. This color will be used for any character that does
+not have an entry in the mask. If you want the entire object to be
+a single color, you can just provide a default color with no mask.
+
+The available colors are: red, green, blue, cyan, magenta, yellow, black
+and white.
+
+Here's an example call to build_object for the bird above.
+
+    $object = $screen->build_object (
+                name		=> "Bird",
+                shape		=> $bird,
+                position	=> [ 5, 8, 7 ],
+                callback_args	=> [ 1, 2, 0, 0 ],
+                color		=> $mask,
+                default_color	=> "BLUE"
+                                    );
 
 =head1 AUTHOR
 

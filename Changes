@@ -1,5 +1,11 @@
 Revision history for Perl extension Term::Animation.
 
+Version 1.0 (2003/12/26)
+	- Added ANSI color support.
+	- Reduced CPU utilization
+	- Made screen resizing with update_term_size work
+	- Added 'animate' call to simplfy main animation loops
+
 Version 0.5 (2003/09/18)
 	- Added fractional frame deltas to move_object
 	- Fixed a bug that caused move_object to mangle 
