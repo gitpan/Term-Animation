@@ -6,8 +6,11 @@ use warnings;
 use Carp;
 use Curses;
 
-our $VERSION = '1.0';
+use Data::Dumper;
 
+our $VERSION = '1.1';
+
+our ($FAILURE, $SUCCESS) = (0, 1);
 our ($color_names, $color_ids) = color_list();
 
 sub new {
@@ -34,6 +37,8 @@ sub new {
   bless ($self, $class);
   return $self;
 }
+
+##################### COLOR UTILITIES #######################
 
 # create lists mapping full color names (eg. 'blue') and
 # single character color ids (eg. 'b')
@@ -68,6 +73,59 @@ sub color_list {
   return (\%color_n, \%color_i);
 }
 
+# build a list of every color combination for our current
+# background color
+sub set_colors {
+  my ($self) = @_;
+
+  my $cid = 1;
+
+  my $bg = eval "Curses::COLOR_$self->{BG}";
+
+  for my $f ('w', 'r', 'g', 'b', 'c', 'm', 'y', 'k') {
+    my $c = uc(color_name($f));
+    init_pair($cid, eval "Curses::COLOR_$c", $bg);
+    $self->{COLORS}{$f} = COLOR_PAIR($cid);
+    $cid++;
+  }
+}
+
+# return the full name of a color, given either a full
+# name or a single char. abbreviation
+sub color_name {
+  my ($color) = @_;
+  if(defined($color_names->{$color})) {
+    return $color_names->{$color};
+  }
+  else {
+    carp("Attempt to allocate unknown color: $color");
+    return undef;
+  }
+}
+
+# return the single char. abbreviation for a color, 
+# given either a full name or abbreviation
+sub color_id {
+  my ($color) = @_;
+  if(defined($color_ids->{$color})) {
+    return $color_ids->{$color};
+  }
+  else {
+    carp("Attempt to allocate unknown color: $color");
+    return undef;
+  }
+}
+
+sub is_valid_color {
+  my ($color) = @_;
+  return(defined($color_ids->{$color}));
+}
+
+sub color_enabled {
+  my ($self) = @_;
+  return $self->{COLOR};
+}
+
 # turn on ANSI color, and initialize color settings
 sub enable_color {
   my ($self) = @_;
@@ -86,12 +144,37 @@ sub disable_color {
   $self->{COLOR} = 0;
 }
 
+# update the background color. accepts either a full
+# color name ('blue') or a single character name ('b')
+sub set_background {
+  my ($self, $color) = @_;
+  my $bg_color = color_name($color);
+  if(defined($bg_color)) {
+    $self->{BG} = uc($bg_color);
+    $self->set_colors();
+    $self->{WIN}->bkgdset($self->{COLORS}{'w'});
+    return $SUCCESS;
+  }
+  else {
+    return $FAILURE;
+  }
+}
+
+########## END COLOR UTILITIES ###########
+
 # perform a single animation cycle
 sub animate {
   my ($self) = @_;
   $self->do_callbacks();
   $self->build_screen();
   $self->display_screen();
+}
+
+# return the size of the screen, and whether or
+# not we had to guess
+sub get_screen_size {
+  my $self = shift;
+  return($self->{WIDTH}+1, $self->{HEIGHT}+1, $self->{ASSUMED_SIZE});
 }
 
 # resize our curses window
@@ -123,40 +206,6 @@ sub get_term_size {
     $height = 24;
   }
   return($width-1, $height-1, $assumed_size);
-}
-
-# build a list of every color combination for our current
-# background color
-sub set_colors {
-  my ($self) = @_;
-
-  my $cid = 1;
-
-  my $bg = eval "Curses::COLOR_$self->{BG}";
-
-  for my $f ('w', 'r', 'g', 'b', 'c', 'm', 'y', 'k') {
-    my $c = uc(color_name($f));
-    init_pair($cid, eval "Curses::COLOR_$c", $bg);
-    $self->{COLORS}{$f} = COLOR_PAIR($cid);
-    $cid++;
-  }
-}
-
-# update the background color. accepts either a full
-# color name ('blue') or a single character name ('b')
-# return 1 on success, 0 on failure
-sub set_background {
-  my ($self, $color) = @_;
-  my $bg_color = color_name($color);
-  if(defined($bg_color)) {
-    $self->{BG} = uc($bg_color);
-    $self->set_colors();
-    $self->{WIN}->bkgdset($self->{COLORS}{'w'});
-    return 1;
-  }
-  else {
-    return 0;
-  }
 }
 
 # write to the curses window
@@ -259,8 +308,7 @@ sub add_object {
   }
 }
 
-# remove an object from the animation. returns 1 on success,
-# 0 on failure
+# remove an object from the animation. 
 sub del_object {
   my ($self, $object_name) = @_;
   if(defined($self->{OBJECTS}{$object_name})) {
@@ -268,11 +316,11 @@ sub del_object {
       $self->{OBJECTS}{$object_name}{DEATH_CB}->($self, $object_name);
     }
     delete $self->{OBJECTS}{$object_name};
-    return 1;
+    return $SUCCESS;
   }
   else {
     carp("Attempted to destroy nonexistant object '$object_name'");
-    return 0;
+    return $FAILURE;
   }
 }
 
@@ -280,32 +328,6 @@ sub del_object {
 sub remove_all_objects {
   my ($self) = @_;
   $self->{OBJECTS} = {};
-}
-
-# return the full name of a color, given either a full
-# name or a single char. abbreviation
-sub color_name {
-  my ($color) = @_;
-  if(defined($color_names->{$color})) {
-    return $color_names->{$color};
-  }
-  else {
-    carp("Attempt to allocate unknown color: $color");
-    return undef;
-  }
-}
-
-# return the single char. abbreviation for a color, 
-# given either a full name or abbreviation
-sub color_id {
-  my ($color) = @_;
-  if(defined($color_ids->{$color})) {
-    return $color_ids->{$color};
-  }
-  else {
-    carp("Attempt to allocate unknown color: $color");
-    return undef;
-  }
 }
 
 # ask for the current frame number of an object
@@ -329,6 +351,7 @@ sub get_position {
   }
   else {
     carp("Position requested for nonexistant object '$object'");
+    return(undef, undef, undef);
   }
 }
 
@@ -338,25 +361,24 @@ sub exist {
   return defined($self->{OBJECTS}{$object});
 }
 
+# get the width of the screen
 sub width {
   my ($self) = @_;
-  return $self->{WIDTH};
+  return $self->{WIDTH} + 1;
 }
 
+# get the height of the screen
 sub height {
   my ($self) = @_;
-  return $self->{HEIGHT};
+  return $self->{HEIGHT} + 1;
 }
+
 
 sub size {
   my ($self) = @_;
   return ( ( $self->{HEIGHT} + 1 ) * ( $self->{WIDTH} + 1 ) )
 }
 
-sub color_enabled {
-  my ($self) = @_;
-  return $self->{COLOR};
-}
 
 # redraw the entire screen
 sub redraw_screen {
@@ -398,22 +420,23 @@ sub build_object {
   $object{DEF_COLOR}	= (defined($p{'default_color'})) ? color_id($p{'default_color'}) : 'w';
   $object{WRAP}         = (defined($p{'wrap'}))         ? $p{'wrap'}         : 0;
   $object{TRANSPARENT}	= (defined($p{'transparent'}))  ? $p{'transparent'}  : '?';
+
   $object{AUTO_DEATH}	= (defined($p{'auto_death'}))   ? lc($p{'auto_death'}) : undef;
   $object{DEATH_ARG}	= (defined($p{'death_arg'}))    ? $p{'death_arg'}    : undef;
   $object{DEATH_CB}	= (defined($p{'death_cb'}))     ? $p{'death_cb'}     : undef;
   $object{DCB_ARGS}	= (defined($p{'dcb_args'}))     ? $p{'dcb_args'}     : undef;
+
   $object{EXTEND_X_POS} = (defined($p{'extend_x'}))     ? $p{'extend_x'} > 0 : 0;
   $object{EXTEND_X_NEG} = (defined($p{'extend_x'}))     ? $p{'extend_x'} < 0 : 0;
   $object{EXTEND_Y_POS} = (defined($p{'extend_y'}))     ? $p{'extend_y'} > 0 : 0;
   $object{EXTEND_Y_NEG} = (defined($p{'extend_y'}))     ? $p{'extend_y'} < 0 : 0;
   $object{EXTENDING}    = $object{EXTEND_X_POS} | $object{EXTEND_X_NEG} | $object{EXTEND_Y_POS} | $object{EXTEND_Y_NEG};
 
-  if(defined($p{'color'})) {
-    ($object{COLOR},$object{ATTR}) = $self->build_mask($object{DEF_COLOR},$p{'color'});
-  }
-  else {
-    ($object{COLOR},$object{ATTR}) = $self->default_mask($object{DEF_COLOR},$#{$object{SHAPE}},$object{HEIGHT},$object{WIDTH});
-  }
+  $object{SUPPLIED_MASK} = $p{'color'};
+  #($object{COLOR},$object{ATTR}) = $self->build_mask($object{DEF_COLOR}, $#{$object{SHAPE}}, $object{HEIGHT}, $object{WIDTH}, $p{'color'});
+  ($object{COLOR},$object{ATTR}) = $self->build_mask(\%object);
+
+  # $self->build_mask($object, $p{'color'});
 
   if   (defined($p{'callback'}))      { $object{CALLBACK} = $p{'callback'}; }
   elsif(defined($p{'callback_args'})) { $object{CALLBACK} = \&move_object;  }
@@ -429,36 +452,67 @@ sub build_object {
   return \%object;
 }
 
-# create a color mask for an object that will only have one color
-sub default_mask {
-  my ($self, $def_color, $frames, $height, $width) = @_;
-  my (@mask, @amask);
-  my $attr = 0;
-
-  if($def_color =~ /[A-Z]/) { $attr = 1; }
-
-  for my $f ( 0..$frames ) {
-    for my $i ( 0..$height ) {
-      for my $j (0..$width ) {
-        $mask[$f][$i][$j] = lc($def_color);
-        if($attr) { $amask[$f][$i][$j] = Curses::A_BOLD; }
-      }
-    }
+sub set_shape {
+  my ($self, $object, $shape) = @_;
+  unless(defined($self->{OBJECTS}{$object})) {
+    carp("Attempt to update shape of nonexistant object $object");
+    return $FAILURE;
   }
-
-  return (\@mask, \@amask);
+  ($self->{OBJECTS}{$object}{SHAPE}, $self->{OBJECTS}{$object}{HEIGHT}, $self->{OBJECTS}{$object}{WIDTH})
+      = $self->build_shape($shape);
+  return $SUCCESS;
 }
 
-# create a color mask for an object        
+sub set_color {
+  my ($self, $object, $color) = @_;
+  unless(defined($self->{OBJECTS}{$object})) {
+    carp("Attempt to update color of nonexistant object $object");
+    return $FAILURE;
+  }
+  $self->{OBJECTS}{$object}{SUPPLIED_MASK} = $color;
+  ($self->{OBJECTS}{$object}{COLOR}, $self->{OBJECTS}{$object}{ATTR})
+      = $self->build_mask($self->{OBJECTS}{$object});
+  return $SUCCESS;
+}
+
+sub set_default_color {
+  my ($self, $object, $color) = @_;
+  unless(is_valid_color($color)) {
+    carp("Invalid color supplied");
+    return $FAILURE;
+  }
+  if(defined($self->{OBJECTS}{$object})) {
+    $self->{OBJECTS}{$object}{DEF_COLOR} = color_id($color);
+    ($self->{OBJECTS}{$object}{COLOR}, $self->{OBJECTS}{$object}{ATTR})
+        = $self->build_mask($self->{OBJECTS}{$object});
+    return $SUCCESS;
+  }
+  else {
+    carp("Attempt to set color of nonexistant object '$object'");
+    return $FAILURE;
+  }  
+}
+
+# create a color mask for an object
 sub build_mask {
-  my ($self, $def_color, @shape) = @_;
-  my ($mask, $height, $width) = $self->build_shape(@shape);
+  my ($self, $o) = @_;
+  #my ($self, $def_color, $frames, $height, $width, $shape) = @_;
+
+  # my $o = $self->{OBJECTS}{$object};
+  my $def_color = $o->{DEF_COLOR};
+  my $frames = $#{$o->{SHAPE}};
+  my $shape = $o->{SUPPLIED_MASK};
 
   my @amask;
+  my $mask = ();
 
-  for my $f (0..$#{$mask}) {
-    for my $i (0..$height) {
-      for my $j (0..$width) {
+  if(defined($shape)) {
+    ($mask, undef, undef) = $self->build_shape($shape);
+  }
+
+  for my $f (0..$frames) {
+    for my $i (0..$o->{HEIGHT}) {
+      for my $j (0..$o->{WIDTH}) {
         if(!defined($mask->[$f][$i][$j]) or $mask->[$f][$i][$j] eq ' ') {
           $mask->[$f][$i][$j] = $def_color;
         }
@@ -675,6 +729,7 @@ sub gen_path {
 sub do_callbacks {
   my ($self) = @_;
 
+  my @kill_objects;
   my $time = time();
 
   foreach my $object (keys %{$self->{OBJECTS}}) {
@@ -690,7 +745,7 @@ sub do_callbacks {
       elsif($o->{AUTO_DEATH} eq 'offscreen') {
         if($o->{X} > $self->{WIDTH} or $o->{Y} > $self->{HEIGHT} or
                $o->{X} < (0 - $o->{WIDTH}) or $o->{Y} < (0 - $o->{HEIGHT})) {
-          del_object($self, $object); next;
+          push(@kill_objects, $object); next;
         }
       }
     }
@@ -707,6 +762,9 @@ sub do_callbacks {
       }
     }
   }
+  foreach my $object (@kill_objects) {
+    del_object($self, $object);
+  }
 }
 
 # stop curses cleanly
@@ -715,6 +773,7 @@ sub end {
   endwin;
 }
 
+# write to a log file, for debugging
 sub elog {
   my ($mesg) = @_;
   open(F, ">>", "elog.log");

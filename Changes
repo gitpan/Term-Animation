@@ -1,5 +1,13 @@
 Revision history for Perl extension Term::Animation.
 
+Version 1.1 (2004/08/02)
+	- Added is_valid_color get_screen_size get_size set_shape
+	  set_color set_default color
+	- width() and height() now return actual value, instead
+	  of actual - 1
+	- Fixed a bug when parsing color masks that are not
+	  the same size as the sprite they are for
+
 Version 1.0 (2003/12/26)
 	- Added ANSI color support.
 	- Reduced CPU utilization
