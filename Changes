@@ -1,0 +1,19 @@
+Revision history for Perl extension Term::Animation.
+
+Version 0.4 (2003/07/27)
+	- Initial public release
+	- Code cleanup and documentation
+
+Version 0.3 (2003/04/17)
+	- Switched from Term::Cap to Curses
+	- Added path generator gen_path
+
+Version 0.2 (2003/02/15)
+	- Added support for multiple frames of animation for
+	  a single object
+	- Added automatic transparency for sprites
+	- Added callbacks and default callback routine
+
+Version 0.1
+	- Initial semi-functional version
+
