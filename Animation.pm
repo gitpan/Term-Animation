@@ -1,24 +1,29 @@
 package Term::Animation;
 
-use 5.008;
+use 5.006;
 use strict;
 use warnings;
 use Carp;
 use Curses;
 
-our $VERSION = '0.04';
+our $VERSION = '0.5';
 
 sub new {
   my $proto = shift;
   my $class = ref($proto) || $proto;
   my $self  = {};
 
-  $self->{OBJECTS}      = {};
+  $self->{OBJECTS} = {};
 
   $self->{WIN} = shift;
-  unless(defined($self->{WIN})) {
-    initscr();
-    $self->{WIN} = newwin(0,0,0,0);
+  if(defined($self->{WIN})) {
+    unless(ref($self->{WIN}) eq 'Curses::Window') {
+      carp("Expecting Curses::Window object, recieved " . ref($self->{WIN}));
+      return undef;
+    }
+  }
+  else {
+    $self->{WIN} = new Curses;
     curs_set(0);
   }
 
@@ -40,8 +45,8 @@ sub get_term_size {
   my $win = shift;
   my ($width, $height, $assumed_size);
   # find the width and height of the terminal
-  $width = getmaxx($win);
-  $height = getmaxy($win);
+  $width = $win->getmaxx();
+  $height = $win->getmaxy();
   if($width and $height) {
     $assumed_size = 0; # so we know if we can limit the max size or not
   }
@@ -59,7 +64,7 @@ sub build_screen {
 
   foreach my $i (0..$self->{HEIGHT}) {
     foreach my $j (0..$self->{WIDTH}) {
-      addstr($self->{WIN}, $i, $j, ' ');
+      $self->{WIN}->addstr($i, $j, ' ');
     }
   }
 
@@ -118,7 +123,7 @@ sub draw_wrapped_object {
             $y_pos = $i - ($h - $y) - 1;
         }
         unless($x_pos < 0 or $x_pos > $w or $y_pos < 0 or $y_pos > $h) {
-          addstr($self->{WIN}, int($y_pos), int($x_pos), $shape->[$i]->[$j]);
+          $self->{WIN}->addstr(int($y_pos), int($x_pos), $shape->[$i]->[$j]);
         }
       }
     }
@@ -146,7 +151,7 @@ sub draw_object {
         if($x_pos > $w) { next; }
         if($y_pos > $h) { next; }
         unless($x_pos < 0 or $x_pos > $w or $y_pos < 0 or $y_pos > $h) {
-          addstr($self->{WIN}, int($y_pos), int($x_pos), $shape->[$i]->[$j]);
+          $self->{WIN}->addstr(int($y_pos), int($x_pos), $shape->[$i]->[$j]);
         }
       }
     }
@@ -174,6 +179,46 @@ sub del_object {
   else {
     carp("Attempted to destroy nonexistant object '$object_name'");
   }
+}
+
+# ask for the current frame number of an object
+sub get_current_frame {
+  my ($self, $object) = @_;
+  if(defined($self->{OBJECTS}{$object})) {
+    return($self->{OBJECTS}{$object}{CURR_FRAME});
+  }
+  else {
+    carp("Frame number requested for nonexistant object '$object'");
+  }
+}
+
+# ask for the position of an object
+sub get_position {
+  my ($self, $object) = @_;
+  if(defined($self->{OBJECTS}{$object})) {
+    return ($self->{OBJECTS}{$object}{X},
+           $self->{OBJECTS}{$object}{Y},
+           $self->{OBJECTS}{$object}{Z});
+  }
+  else {
+    carp("Position requested for nonexistant object '$object'");
+  }
+}
+
+# ask if an object exists or not
+sub exist {
+  my ($self, $object) = @_;
+  return defined($self->{OBJECTS}{$object});
+}
+
+sub width {
+  my ($self) = @_;
+  return $self->{WIDTH};
+}
+
+sub height {
+  my ($self) = @_;
+  return $self->{HEIGHT};
 }
 
 # redraw the entire screen
@@ -256,6 +301,8 @@ sub build_shape {
         $shape_array[$i] = $shape->[$i];
       }
       else {
+        # strip an empty line from the top, for convenience
+        $shape->[$i] =~ s/^\n//;
         for my $line (split("\n", $shape->[$i])) {
           $this_height++;
           if(length($line) > $width) { $width = length($line); }
@@ -266,6 +313,8 @@ sub build_shape {
     }
   }
   else {
+    # strip an empty line from the top, for convenience
+    $shape =~ s/^\n//;
     for my $line (split("\n", $shape)) {
       $height++;
       if(length($line) > $width) { $width = length($line); }
@@ -328,8 +377,10 @@ sub move_object {
     }
     else {
       $cb_args = $o->{CALLBACK_ARGS};
-      $f = $o->{CURR_FRAME} + $cb_args->[3];
-      $f = $f % ($#{$o->{SHAPE}} + 1);
+      if($cb_args->[3]) {
+        $f = $o->{CURR_FRAME} + $cb_args->[3];
+        $f = ($f - int($f)) + ($f % ($#{$o->{SHAPE}} + 1));
+      }
     }
 
     my $x = $o->{X} + $cb_args->[0];
@@ -337,10 +388,10 @@ sub move_object {
     my $z = $o->{Z} + $cb_args->[2];
 
     if($o->{WRAP}) {
-      if($x > $self->{WIDTH})  { $x = ($x % $self->{WIDTH}) - 1;  }
-      elsif($x < 0)            { $x = ($x % $self->{WIDTH}) + 1;  }
-      if($y > $self->{HEIGHT}) { $y = ($y % $self->{HEIGHT}) - 1; }
-      elsif($y < 0)            { $y = ($y % $self->{HEIGHT}) + 1; }
+      if($x > $self->{WIDTH})  { $x = ($x - int($x)) + ($x % $self->{WIDTH});  }
+      elsif($x < 0)            { $x = ($x - int($x)) + ($x % $self->{WIDTH});  }
+      if($y > $self->{HEIGHT}) { $y = ($y - int($y)) + ($y % $self->{HEIGHT}); }
+      elsif($y < 0)            { $y = ($y - int($y)) + ($y % $self->{HEIGHT}); }
     }
     return($x, $y, $z, $f);
   }
@@ -463,12 +514,17 @@ sub do_callbacks {
 }
 
 
+sub end {
+  my ($self) = @_;
+  endwin;
+}
+
 1;
 __END__
 
 =head1 NAME
 
-Term::Animation - Perl extension for doing text animation
+Term::Animation - ASCII sprite animation framework
 
 =head1 SYNOPSIS
 
@@ -534,6 +590,9 @@ This example moves a small object across the screen from left to right.
       sleep 1;
     }
 
+    # in the unlikely event that 1 becomes untrue, exit cleanly
+    $screen->end();
+
 This illustrates how to draw your animation into an existing Curses window.
 
     use Term::Animation;
@@ -573,7 +632,15 @@ and a set of arguments to describe the object's behavior. The only required
 arguments are C<name> and C<shape>.
 
     name              A string uniquely identifying this object
-    shape             
+    shape             The ASCII art for this object. It can be provided as:
+                      1) A single multi-line text string
+                      2) An array of multi-line text strings
+                      3) An array of 2D arrays, where each array element
+                         is a single character
+                      If you provide an array, each element is a single
+                      frame of animation. If you provide either 1) or
+                      2), a single newline will be stripped off of
+                      the beginning of each string.
     position          A list specifying initial x,y and z coordinates
                       Default: [ 0, 0, 0 ]
     callback          Callback routine for this object
@@ -611,6 +678,15 @@ I<do_callbacks()> in the middle won't do anything.
 
 Run the callback routines for all of the objects in the animation.
 
+=item I<end()>
+
+Run the Curses endwin function to get your terminal back to its
+normal mode. You should call this before your program exits.
+
+=item I<exist('object_name')>
+
+Given an object name, will return true if it exists, false if it doesn't.
+
 =item I<gen_path (x,y,z, x,y,z, [ frame_pattern ], [ steps ])>
 
 Given beginning and end points, this will return a path for the
@@ -628,6 +704,16 @@ to take to finish the path. Valid arguments are:
   shortest     The shorter of the X and Y distances
   X,Y or Z     Select the x, y or z distance
   <number>     Explicitly specify the number of steps to take
+
+=item I<get_current_frame('object_name')>
+
+Returns the current animation frame number of the named object. Carps
+if the object does not exist.
+
+=item I<get_position('object name')>
+
+Returns the x,y,z coordinates of the named object. Carps if the object
+does not exist.
 
 =item I<move_object('object name')>
 

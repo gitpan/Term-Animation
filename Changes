@@ -1,5 +1,14 @@
 Revision history for Perl extension Term::Animation.
 
+Version 0.5 (2003/09/18)
+	- Added fractional frame deltas to move_object
+	- Fixed a bug that caused move_object to mangle 
+	  fractional x/y postions when wrapping around the screen
+	- Added some routines to get info about animation objects
+	  (get_current_frame, get_postion, exist, width, height)
+	- Now strip newline from the beginning of object shapes for convenience
+	- Added 'end' function to tidy up terminal settings when the program exits
+
 Version 0.4 (2003/07/27)
 	- Initial public release
 	- Code cleanup and documentation
