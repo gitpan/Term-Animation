@@ -1,5 +1,17 @@
 Revision history for Perl extension Term::Animation.
 
+Version 2.0 (2005/07/09)
+	- Added Term::Animation::Entity to replace the previous
+	  hash that an animation entity was composed of.
+	- This version breaks backwards compatibility with
+	  previous versions. See MIGRATION for details on
+	  moving to this version.
+	- Added optional collision detection between entities
+	- Names are no longer required for entities
+	- The direction of the Z dimension (depth) has been
+	  reversed. Higher numbers now indicate that the
+	  entity is further away
+
 Version 1.1 (2004/08/02)
 	- Added is_valid_color get_screen_size get_size set_shape
 	  set_color set_default color
