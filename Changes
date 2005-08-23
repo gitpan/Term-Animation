@@ -1,5 +1,10 @@
 Revision history for Perl extension Term::Animation.
 
+Version 2.1 (2005/08/23)
+	- Fixed a memory leak when a entity is physical but
+	  doesn't have a collision handler
+	- Added get_entities and entity_count
+
 Version 2.0.1 (2005/07/13)
 	- No changes, using a more widely usable tar format
 

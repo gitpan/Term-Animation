@@ -98,7 +98,7 @@ Everything else would be identical to the previous example.
 
 =cut
 
-our $VERSION = '2.0.1';
+our $VERSION = '2.1';
 
 our ($color_names, $color_ids) = _color_list();
 
@@ -547,8 +547,6 @@ Removes an entity from the animation. Accepts either an entity
 name or a reference to the entity itself.
 
 =cut
-# FIXME put object refs in the queue instead of entity names
-# queue an entity for removal from the animation. 
 sub del_entity {
 	my ($self, $entity) = @_;
 	if(ref($entity)) {
@@ -566,10 +564,11 @@ sub del_entity {
 sub _remove_deleted_entities {
 	my ($self) = @_;
 	while(my $entity_name = shift @{$self->{DELETEQUEUE}}) {
-		if(defined($self->{ENTITIES}{$entity_name}{DEATH_CB})) {
-			$self->{ENTITIES}{$entity_name}{DEATH_CB}->($self->{ENTITIES}{$entity_name}, $self);
+		my $entity = $self->{ENTITIES}{$entity_name};
+		if(defined($entity->{DEATH_CB})) {
+			$entity->{DEATH_CB}->($entity, $self);
 		}
-		if($self->{ENTITIES}{$entity_name}->{PHYSICAL}) {
+		if($entity->{PHYSICAL}) {
 			$self->{PHYSICALCOUNT}--;
 			delete $self->{PHYSICALENTITIES}{$entity_name};
 		}
@@ -594,9 +593,38 @@ sub remove_all_entities {
 	$self->{ENTITIES} = {};
 }
 
+=item I<entity_count>
+
+  $number_of_entities = $anim->entity_count();
+
+Returns the number of entities in the animation.
+
+=cut
+sub entity_count {
+	my ($self) = @_;
+	my $count = 0;
+	foreach (keys %{$self->{ENTITIES}}) {
+		$count++;
+	}
+	return $count;
+}
+
+=item I<get_entities>
+
+  $entity_list = $anim->get_entities();
+
+Returns a reference to a list of all entities in the animation.
+
+=cut
+sub get_entities {
+	my ($self) = @_;
+	my @entities = keys %{$self->{ENTITIES}};
+	return \@entities;
+}
+
 =item I<get_entities_of_type>
 
-  $entity_list = get_entities_of_type( $type );
+  $entity_list = $anim->get_entities_of_type( $type );
 
 Returns a reference to a list of all entities in the animation
 that have the given type.
@@ -843,8 +871,8 @@ sub _collision_handlers {
 	foreach my $entity (values %{$self->{ENTITIES}}) {
 		if(defined($entity->{COLL_HANDLER}) && defined($entity->{COLLISIONS})) {
 			$entity->{COLL_HANDLER}->($entity, $self);
-			$entity->{COLLISIONS} = ();
 		}
+		$entity->{COLLISIONS} = ();
 	}
 }
 
