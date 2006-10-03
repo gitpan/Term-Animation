@@ -109,6 +109,12 @@ represent a single sprite on the screen.
 
 =item I<new>
 
+  my $entity = Term::Animation::Entity->new(
+      shape         => ';-)',
+      position      => [ 1, 2, 3 ],
+      callback_args => [ 0, 1, 0, 0 ],
+  );
+
 Create a Term::Animation::Entity instance. See the PARAMETERS section for
 details. The only required parameter is C<shape>.
 
@@ -656,6 +662,8 @@ sub _build_shape {
 }
 
 1;
+
+=back
 
 =head1 AUTHOR
 

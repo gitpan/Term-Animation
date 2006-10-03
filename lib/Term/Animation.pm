@@ -98,7 +98,7 @@ Everything else would be identical to the previous example.
 
 =cut
 
-our $VERSION = '2.1';
+our $VERSION = '2.1.1';
 
 our ($color_names, $color_ids) = _color_list();
 
@@ -892,7 +892,7 @@ sub end {
 }
 
 # write to a log file, for debugging
-sub elog {
+sub _elog {
 	my ($mesg) = @_;
 	open(F, ">>", "elog.log");
 	print F "$mesg\n";
@@ -900,6 +900,8 @@ sub elog {
 }
 
 1;
+
+=back
 
 =head1 CALLBACK ROUTINES
 

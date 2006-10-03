@@ -7,3 +7,4 @@ MIGRATION
 README
 t/use.t
 examples/color_nature.pl
+META.yml
