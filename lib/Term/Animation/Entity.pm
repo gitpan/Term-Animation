@@ -76,6 +76,10 @@ represent a single sprite on the screen.
   	Whether this entity should be killed if
 	it goes off the screen. Default: 0
 
+  die_entity < ENTITY >
+  	Specifies an entity (ref or name). When the named
+	entity dies, this entity should die as well. Default: undef
+
   die_time < INTEGER >
   	The time at which this entity should be killed. This 
 	should be a UNIX epoch time, as returned
@@ -116,7 +120,7 @@ represent a single sprite on the screen.
   );
 
 Create a Term::Animation::Entity instance. See the PARAMETERS section for
-details. The only required parameter is C<shape>.
+details.
 
 =cut
 sub new {
@@ -144,7 +148,7 @@ sub new {
 	$self->{AUTO_TRANS}		= defined($p{'auto_trans'})	? $p{'auto_trans'}		: 0;
 	if($self->{AUTO_TRANS}) { $p{'shape'} = _auto_trans($p{'shape'}, $self->{TRANSPARENT}); }
 	($self->{SHAPE}, $self->{HEIGHT}, $self->{WIDTH}) = _build_shape($self, $p{'shape'});
-	($self->{X}, $self->{Y}, $self->{Z})	= defined($p{'position'})	? @{$p{'position'}}		: [ 0, 0, 0 ];
+	($self->{X}, $self->{Y}, $self->{Z})	= defined($p{'position'})	? @{$p{'position'}}		: ( 0, 0, 0 );
 	$self->{DEF_COLOR}		= defined($p{'default_color'})	? Term::Animation::color_id($p{'default_color'}) : 'w';
 	_build_mask($self, $p{'color'});
 
@@ -169,6 +173,14 @@ sub new {
 	$self->{DIE_FRAME}      = defined($p{'die_frame'})     ? $p{'die_frame'}     : undef;
 	$self->{DEATH_CB}	= defined($p{'death_cb'})      ? $p{'death_cb'}      : undef;
 	$self->{DCB_ARGS}	= defined($p{'dcb_args'})      ? $p{'dcb_args'}      : undef;
+	if(defined($p{'die_entity'})) {
+		if(ref($p{'die_entity'})) {
+			$p{'die_entity'} = $p{'die_entity'}->name();
+		}
+		$self->{DIE_ENTITY} = $p{'die_entity'};
+	} else {
+		$self->{DIE_ENTITY} = undef;
+	}
 
 	# misc
 	$self->{TYPE}		= defined($p{'type'})		? $p{'type'}	: "self";

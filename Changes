@@ -1,5 +1,9 @@
 Revision history for Perl extension Term::Animation.
 
+Version 2.2 (2006/10/21)
+	- Added die_entity parameter when creating an entity
+	- Fixed a bug that prevented the default entity position from working
+
 Version 2.1.1 (2006/10/03)
 	- Minor doc and test fixes
 

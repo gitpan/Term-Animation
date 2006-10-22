@@ -98,7 +98,7 @@ Everything else would be identical to the previous example.
 
 =cut
 
-our $VERSION = '2.1.1';
+our $VERSION = '2.2';
 
 our ($color_names, $color_ids) = _color_list();
 
@@ -641,6 +641,34 @@ sub get_entities_of_type {
 	return \@entities;
 }
 
+=item I<is_living>
+
+  my $is_living = $anim->is_living( $entity );
+
+Return 1 if the entity name or reference is in the animation
+and is not scheduled for deletion. Returns 0 otherwise.
+
+=cut
+sub is_living {
+	my ($self, $entity) = @_;
+
+	if(ref($entity) eq 'Term::Animation::Entity') {
+		$entity = $entity->name();
+	}
+
+	unless(exists($self->{'ENTITIES'})) {
+		return 0;
+	}
+
+	foreach my $dying_ent (@{$self->{DELETEQUEUE}}) {
+		if($dying_ent eq $entity) {
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
 =item I<entity>
 
   $entity_ref = $anim->entity( $entity_name );
@@ -820,6 +848,7 @@ sub gen_path {
 	return \@path;
 }
 
+
 # run the callback routines for all entities that have them, and update
 # the entity accordingly. also checks for auto death status
 sub _do_callbacks {
@@ -834,6 +863,10 @@ sub _do_callbacks {
 		}
 
 		if(defined($ent->{'DIE_FRAME'}) and ($ent->{'DIE_FRAME'}--) <= 0) {
+			del_entity($self, $entity); next;
+		}
+
+		if(defined($ent->{'DIE_ENTITY'}) and !$self->is_living($ent->{'DIE_ENTITY'}) ) {
 			del_entity($self, $entity); next;
 		}
 
