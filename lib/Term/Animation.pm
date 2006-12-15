@@ -98,7 +98,7 @@ Everything else would be identical to the previous example.
 
 =cut
 
-our $VERSION = '2.2';
+our $VERSION = '2.3';
 
 our ($color_names, $color_ids) = _color_list();
 
@@ -121,6 +121,12 @@ sub new {
 	$self->{PHYSICALENTITIES} = {};
 	$self->{PHYSICALCOUNT} = 0;
 	$self->{COLOR_ENABLED} = 0;
+	$self->{LAST_FRAME_TIME} = 0;
+
+	# framerate related settings
+	$self->{TRACK_FRAMERATE} = 1;
+	$self->{FRAMERATE} = 0;
+	$self->{FRAMES_THIS_SECOND} = 0;
 
 	$self->{WIN} = shift;
 	if(defined($self->{WIN})) {
@@ -400,6 +406,50 @@ sub animate {
 	$self->_remove_deleted_entities();
 	$self->_build_screen();
 	$self->_display_screen();
+	$self->_track_frame_rate() if $self->{TRACK_FRAMERATE};
+}
+
+sub _track_frame_rate {
+	my ($self) = @_;
+	my $time = time();
+	if($time > $self->{LAST_FRAME_TIME}) {
+		$self->{LAST_FRAME_TIME} = $time;
+		$self->{FRAMERATE} = ($self->{FRAMERATE} + ($self->{FRAMES_THIS_SECOND} * 2) ) / 3;
+		$self->{FRAMES_THIS_SECOND} = 1;
+	} else {
+		$self->{FRAMES_THIS_SECOND}++;
+	}
+}
+
+=item I<track_framerate>
+
+  $anim->track_framerate(1);
+  $tracking_framerate = $anim->track_framerate();
+
+Get or set the flag that indicates whether the module
+should keep track of the animation framerate. This is
+enabled by default.
+
+=cut
+sub track_framerate {
+	my ($self) = @_;
+	if(@_) {
+		$self->{TRACK_FRAMERATE} = shift;
+	}
+	return $self->{TRACK_FRAMERATE};
+}
+
+=item I<framerate>
+
+  $frames_per_second = $anim->framerate();
+
+Returns the approximate number of frames being displayed
+per second, as indicated by calls to the I<animate> method.
+
+=cut
+sub framerate {
+	my ($self) = @_;
+	return $self->{FRAMERATE};
 }
 
 =item I<screen_size>

@@ -1,5 +1,9 @@
 Revision history for Perl extension Term::Animation.
 
+Version 2.3 (2006/12/14)
+	- Added framerate tracking
+	- Added accessor methods for a bunch of stuff in Term::Animation::Entity
+
 Version 2.2 (2006/10/21)
 	- Added die_entity parameter when creating an entity
 	- Fixed a bug that prevented the default entity position from working

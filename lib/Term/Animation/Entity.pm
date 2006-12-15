@@ -7,8 +7,6 @@ use Carp;
 use Curses;
 use Term::Animation;
 
-use Data::Dumper;
-
 =head1 NAME
 
 Term::Animation::Entity
@@ -228,6 +226,37 @@ sub auto_trans {
 	return $self->{AUTO_TRANS};
 }
 
+=item I<transparent>
+
+  $entity->transparent( '*' );
+  $trans_char = $entity->transparent();
+
+Gets or sets the transparent character for this entity's sprite.
+This will only affect subsequent calls to I<shape>, the current
+sprite will be unchanged.
+
+=cut
+sub transparent {
+	my $self = shift;
+	if(@_) { $self->{TRANSPARENT} = shift; }
+	return $self->{TRANSPARENT};
+}
+
+=item I<wrap>
+
+  $entity->wrap( 1 );
+  $wrap = $entity->wrap;
+
+Gets or sets the boolean that indicates whether this entity
+should wrap around when it gets to an edge of the screen.
+
+=cut
+sub wrap {
+	my $self = shift;
+	if(@_) { $self->{WRAP} = shift; }
+	return $self->{WRAP};
+}
+
 =item I<data>
 
   $entity->data( $stuff );
@@ -386,6 +415,91 @@ sub callback {
 	my $self = shift;
 	if(@_) { $self->{CALLBACK} = shift; }
 	return $self->{CALLBACK};
+}
+
+=item I<death_cb>
+
+  $entity->death_cb( \&death_callback_routine );
+  $death_callback_routine = $entity->death_cb();
+
+Get or set the callback routine that is called
+when the entity dies. Set to undef if you do not
+want anything to be called.
+
+=cut
+sub death_cb {
+	my $self = shift;
+	if(@_) { $self->{DEATH_CB} = shift; }
+	return $self->{DEATH_CB};
+}
+
+=item I<die_offscreen>
+
+  $entity->die_offscreen( 1 );
+  $die_offscreen = $entity->die_offscreen;
+
+Get or set the flag that indicates whether this
+entity should die when it is entirely off the screen.
+
+=cut
+sub die_offscreen {
+	my $self = shift;
+	if(@_) { $self->{DIE_OFFSCREEN} = shift; }
+	return $self->{DIE_OFFSCREEN};
+}
+
+=item I<die_frame>
+
+  $entity->die_frame( 1 );
+  $die_frame = $entity->die_frame;
+
+Get or set the frame number in which this entity
+should die, counting from the time when die_frame
+is called. Set to undef to disable.
+
+=cut
+sub die_frame {
+	my $self = shift;
+	if(@_) { $self->{DIE_FRAME} = shift; }
+	return $self->{DIE_FRAME};
+}
+
+=item I<die_time>
+
+  $entity->die_time( time() + 20 );
+  $die_time = $entity->die_time;
+
+Get or set the time at which this entity should die.
+The time is a UNIX epoch time. Set to undef to disable.
+
+=cut
+sub die_time {
+	my $self = shift;
+	if(@_) { $self->{DIE_TIME} = shift; }
+	return $self->{DIE_TIME};
+}
+
+=item I<die_entity>
+
+  $entity->die_entity( $other_entity );
+  $other_entity = $entity->die_entity;
+
+Get or set an entity whose death will cause the
+death of this entity. Either an entity name or
+Term::Animation::Entity reference are accepted, but
+an entity name is always returned. Set to undef to disable.
+
+=cut
+sub die_entity {
+	my $self = shift;
+	if(@_) {
+		my $ent = shift;
+		if(ref($ent)) {
+			$ent = $ent->name;
+		}
+		$self->{DIE_ENTITY} = $ent;
+	}
+	return $self->{DIE_ENTITY};
 }
 
 =item I<shape>
