@@ -98,7 +98,7 @@ Everything else would be identical to the previous example.
 
 =cut
 
-our $VERSION = '2.3';
+our $VERSION = '2.4';
 
 our ($color_names, $color_ids) = _color_list();
 
@@ -706,7 +706,7 @@ sub is_living {
 		$entity = $entity->name();
 	}
 
-	unless(exists($self->{'ENTITIES'})) {
+	unless(exists($self->{'ENTITIES'}{$entity})) {
 		return 0;
 	}
 
