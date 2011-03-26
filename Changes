@@ -1,5 +1,10 @@
 Revision history for Perl extension Term::Animation.
 
+Version 2.5 (2011/03/25)
+	- Added a workaround for problematic Curses/ncurses installs where the
+	  constructor does not return an object
+	- Added a 'follow' option, to attach one entity to another
+
 Version 2.4 (2006/12/17)
 	- Fixed a stupid bug that caused the is_living method to rarely work
 

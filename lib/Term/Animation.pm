@@ -98,7 +98,7 @@ Everything else would be identical to the previous example.
 
 =cut
 
-our $VERSION = '2.4';
+our $VERSION = '2.5';
 
 our ($color_names, $color_ids) = _color_list();
 
@@ -136,7 +136,15 @@ sub new {
 		}
 		$self->{FULLSCREEN} = 0;
 	} else {
+		# this is the method in the docs...
 		$self->{WIN} = new Curses;
+		# ...but apparently it's broken with some versions of Curses or ncurses.
+		# this seems to work everywhere, but the Curses.pm docs
+		# say to call the constructor when using objects.
+		unless(defined($self->{WIN})) {
+			$self->{WIN} = Curses::initscr();
+		}
+
 		noecho();
 		curs_set(0);
 		$self->{FULLSCREEN} = 1;
@@ -404,6 +412,7 @@ sub animate {
 		$self->_collision_handlers();
 	}
 	$self->_remove_deleted_entities();
+	$self->_move_followers();
 	$self->_build_screen();
 	$self->_display_screen();
 	$self->_track_frame_rate() if $self->{TRACK_FRAMERATE};
@@ -906,7 +915,7 @@ sub _do_callbacks {
 
 	foreach my $entity (keys %{$self->{ENTITIES}}) {
 		my $ent = $self->{ENTITIES}{$entity};
-
+		
 		# check for methods to automatically die
 		if(defined($ent->{'DIE_TIME'}) and $ent->{'DIE_TIME'} <= time()) {
 			del_entity($self, $entity); next;
@@ -945,7 +954,29 @@ sub _do_callbacks {
 			}
 			$ent->{Z} = defined($z) ? $z : $ent->{Z};
 			$ent->{CURR_FRAME} = defined($f) ? $f : $ent->{CURR_FRAME};
+		
 		}
+	}
+}
+
+# called after all other updates. moves any entities that
+# follow another entity
+sub _move_followers {
+	my ($self) = @_;
+
+	foreach my $entity_name (keys %{$self->{ENTITIES}}) {
+		my $follower = $self->{ENTITIES}{$entity_name};
+
+		next unless(defined($follower->{FOLLOW_ENTITY}));
+
+		my $leader = $self->entity($follower->{FOLLOW_ENTITY});
+		next unless(defined($leader));
+		my $offset = $follower->{FOLLOW_OFFSET};
+
+		if(defined($offset->[0])) { $follower->x( $offset->[0] + $leader->x ); }
+		if(defined($offset->[1])) { $follower->y( $offset->[1] + $leader->y ); }
+		if(defined($offset->[2])) { $follower->z( $offset->[2] + $leader->z ); }
+		if(defined($offset->[3])) { $follower->frame( $offset->[3] + $leader->frame ); }
 	}
 }
 

@@ -161,6 +161,8 @@ sub new {
 	if   (defined($p{'callback'}))      { $self->{CALLBACK} = $p{'callback'}; }
 	elsif(defined($p{'callback_args'})) { $self->{CALLBACK} = \&move_entity;  }
 	else                                { $self->{CALLBACK} = undef;          }
+	$self->{FOLLOW_ENTITY}  = defined($p{'follow_entity'})? $self->_get_entity_name($p{'follow_entity'}) : undef;
+	$self->{FOLLOW_OFFSET}  = defined($p{'follow_offset'})? $p{'follow_offset'} : undef;
 
 	# state
 	$self->{CURR_FRAME}	= defined($p{'curr_frame'})   ? $p{'curr_frame'}   : 0;
@@ -171,14 +173,7 @@ sub new {
 	$self->{DIE_FRAME}      = defined($p{'die_frame'})     ? $p{'die_frame'}     : undef;
 	$self->{DEATH_CB}	= defined($p{'death_cb'})      ? $p{'death_cb'}      : undef;
 	$self->{DCB_ARGS}	= defined($p{'dcb_args'})      ? $p{'dcb_args'}      : undef;
-	if(defined($p{'die_entity'})) {
-		if(ref($p{'die_entity'})) {
-			$p{'die_entity'} = $p{'die_entity'}->name();
-		}
-		$self->{DIE_ENTITY} = $p{'die_entity'};
-	} else {
-		$self->{DIE_ENTITY} = undef;
-	}
+	$self->{DIE_ENTITY}     = defined($p{'die_entity'})    ? $self->_get_entity_name($p{'die_entity'}) : undef;
 
 	# misc
 	$self->{TYPE}		= defined($p{'type'})		? $p{'type'}	: "self";
@@ -377,15 +372,38 @@ sub size {
   my ($x, $y, $z) = $entity->position();
   $entity->position($x, $y, $z);
 
-Gets or sets the X / Y / Z coordinates of the entity. Note that
-you should normally position an entity using its callback routine,
-instead of calling I<position>.
+Gets or sets the X / Y / Z coordinates of the entity. You can also
+access each coordinate individually.
+
+  my $x = $entity->x;
+  $entity->x(5);
+
+Note that you should normally position an entity using its callback routine,
+instead of calling one of these methods.
 
 =cut
 sub position {
 	my $self = shift;
 	if(@_) { ($self->{X}, $self->{Y}, $self->{Z}) = @_; }
 	return ($self->{X}, $self->{Y}, $self->{Z});
+}
+
+sub x {
+	my $self = shift;
+	if(@_) { ($self->{X}) = @_ }
+	return $self->{X};
+}
+
+sub y {
+	my $self = shift;
+	if(@_) { ($self->{Y}) = @_ }
+	return $self->{Y};
+}
+
+sub z {
+	my $self = shift;
+	if(@_) { ($self->{Z}) = @_ }
+	return $self->{Z};
 }
 
 =item I<callback_args>
@@ -500,6 +518,31 @@ sub die_entity {
 		$self->{DIE_ENTITY} = $ent;
 	}
 	return $self->{DIE_ENTITY};
+}
+
+sub follow_entity {
+	my $self = shift;
+	if(@_ && defined($self->animation)) {
+		
+		my ($ent) = @_;
+
+		if(defined($ent)) {
+			$self->{FOLLOW_ENTITY} = $self->_get_entity_name($ent);
+		} else {
+			$self->{FOLLOW_ENTITY} = undef;
+		}
+	}
+	return $self->{FOLLOW_ENTITY};
+
+}
+
+sub follow_offset {
+	my $self = shift;
+
+	if(@_) {
+		$self->{FOLLOW_OFFSET} = shift;
+	}
+	return $self->{FOLLOW_OFFSET};
 }
 
 =item I<shape>
@@ -785,6 +828,18 @@ sub _build_shape {
 		}
 	}
 	return \@shape_array, $height, $width;
+}
+
+# look up the name of an entity if given an entity,
+# just return the string if we got a string
+sub _get_entity_name {
+	my ($self, $entity) = @_;
+
+	if(ref($entity)) {
+		return $entity->name;
+	} else {
+		return $entity;
+	}
 }
 
 1;
