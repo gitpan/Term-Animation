@@ -1,5 +1,8 @@
 Revision history for Perl extension Term::Animation.
 
+Version 2.6 (2011/03/29)
+	- Removed broken pod tests
+
 Version 2.5 (2011/03/25)
 	- Added a workaround for problematic Curses/ncurses installs where the
 	  constructor does not return an object

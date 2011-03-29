@@ -5,8 +5,6 @@ Makefile.PL
 MANIFEST
 MIGRATION
 README
-t/pod.t
-t/pod-coverage.t
 t/use.t
 examples/color_nature.pl
 META.yml

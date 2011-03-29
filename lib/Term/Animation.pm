@@ -98,7 +98,7 @@ Everything else would be identical to the previous example.
 
 =cut
 
-our $VERSION = '2.5';
+our $VERSION = '2.6';
 
 our ($color_names, $color_ids) = _color_list();
 

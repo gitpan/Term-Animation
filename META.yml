@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Term-Animation
-version:            2.5
+version:            2.6
 abstract:           ASCII sprite animation framework
 author:
     - Kirk Baucom <kbaucom@schizoid.com>
